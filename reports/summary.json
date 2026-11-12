@@ -1,0 +1,13 @@
+{
+  "seed": 61,
+  "training_observations": 504,
+  "testing_observations": 252,
+  "weights": [
+    0.731870697537402,
+    0.14268432182739813,
+    0.12544498063519988
+  ],
+  "test_annualized_volatility": 0.14098560200688953,
+  "equal_weight_test_annualized_volatility": 0.1737912327950592,
+  "synthetic_test_terminal_wealth": 1.0280616709463468
+}
