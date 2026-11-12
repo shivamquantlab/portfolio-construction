@@ -1,5 +1,7 @@
 """Projected-gradient minimum-variance optimization on the long-only simplex."""
 
+from numbers import Integral, Real
+
 import numpy as np
 
 
@@ -27,22 +29,36 @@ def minimum_variance_weights(
     matrix = np.asarray(covariance, dtype=float)
     if matrix.ndim != 2 or matrix.shape[0] != matrix.shape[1] or matrix.shape[0] == 0:
         raise ValueError("covariance must be a non-empty square matrix")
-    if not np.isfinite(matrix).all() or not np.allclose(matrix, matrix.T, atol=1e-10):
+    if not np.isfinite(matrix).all():
         raise ValueError("covariance must be finite and symmetric")
-    if tolerance <= 0 or max_iterations < 1:
+    scale = float(np.max(np.abs(matrix)))
+    symmetry_tolerance = np.finfo(float).eps * max(1, matrix.shape[0]) * scale * 10.0
+    if not np.allclose(matrix, matrix.T, rtol=0.0, atol=symmetry_tolerance):
+        raise ValueError("covariance must be finite and symmetric")
+    if (
+        isinstance(tolerance, (bool, np.bool_))
+        or not isinstance(tolerance, Real)
+        or not np.isfinite(tolerance)
+        or float(tolerance) <= 0
+        or isinstance(max_iterations, (bool, np.bool_))
+        or not isinstance(max_iterations, Integral)
+        or max_iterations < 1
+    ):
         raise ValueError("tolerance and max_iterations must be positive")
-    eigenvalues = np.linalg.eigvalsh(matrix)
-    if eigenvalues[0] < -1e-10:
+    if scale == 0.0:
+        return np.full(matrix.shape[0], 1.0 / matrix.shape[0])
+    normalized = 0.5 * (matrix / scale + (matrix / scale).T)
+    eigenvalues = np.linalg.eigvalsh(normalized)
+    psd_tolerance = np.finfo(float).eps * max(1, matrix.shape[0]) * 100.0
+    if eigenvalues[0] < -psd_tolerance:
         raise ValueError("covariance must be positive semidefinite")
     largest = float(eigenvalues[-1])
-    if largest <= 1e-15:
-        return np.full(matrix.shape[0], 1.0 / matrix.shape[0])
     step_size = 1.0 / (2.0 * largest)
     weights = np.full(matrix.shape[0], 1.0 / matrix.shape[0])
     for _ in range(max_iterations):
-        updated = _project_simplex(weights - step_size * (2.0 * matrix @ weights))
+        updated = _project_simplex(weights - step_size * (2.0 * normalized @ weights))
         if np.linalg.norm(updated - weights, ord=2) <= tolerance:
             return updated
         weights = updated
-    return weights
+    raise RuntimeError("minimum-variance optimizer did not converge within max_iterations")
 
